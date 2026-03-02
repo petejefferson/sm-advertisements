@@ -1,9 +1,13 @@
-# Advertisements Plugin - Database Integration Summary
+# Advertisements Plugin - Database Fork
 
-## Changes Made
+Based on the original [Advertisements plugin](https://github.com/ErikMinekus/sm-advertisements) version 2.1.2, this fork adds database support for storing advertisement messages.
+
+### Database Support
+
+The plugin now supports storing advertisements in a database (SQLite, MySQL, PostgreSQL, or any SourceMod-compatible database) with automatic fallback to flat files if the database cannot be accessed.
 
 ### Version Update
-- Updated plugin version from 2.1.2 to 2.1.3
+- Plugin version: 2.1.2-db (database-enabled fork)
 
 ### New ConVars
 - `sm_advertisements_database` - Controls whether to use database (1) or flat files (0). Default: 1
@@ -14,6 +18,8 @@
 - `g_hUseDatabase` - ConVar handle for database toggle
 - `g_hDatabaseConfig` - ConVar handle for database config name
 - `g_hDatabase` - Database connection handle
+
+## Technical Implementation
 
 ### New Functions
 
@@ -29,12 +35,12 @@
 
 3. **CreateDatabaseTables()** - Creates database schema
    - Detects database driver (MySQL, SQLite, PostgreSQL, etc.)
-   - Creates `advertisements_messages` table with driver-specific syntax
+   - Creates `advertisements` table with driver-specific syntax
    - Calls LoadAdsFromDatabase() after table creation
 
 4. **LoadAdsFromDatabase()** - Loads advertisements from database
    - Detects database driver for query syntax
-   - Queries `advertisements_messages` table
+   - Queries `advertisements` table
    - Orders by 'order' field, then 'id'
    - Only loads enabled advertisements (enabled = 1)
    - Automatically falls back to flat files on any error
@@ -47,6 +53,17 @@
 3. **ConVarChanged_File()** - Only reloads if not using database
 4. **ConVarChanged_Database()** - New hook to handle database-related ConVar changes
 5. **Command_ReloadAds()** - Reloads from DB or files based on mode
+
+## Usage
+
+For detailed setup and usage instructions, see [DATABASE_USAGE.md](addons/sourcemod/configs/DATABASE_USAGE.md) in the configs folder.
+
+### Quick Start
+
+1. Configure database connection in `databases.cfg`
+2. Initialize database with provided SQL files
+3. Set ConVars: `sm_advertisements_database 1`
+4. Reload plugin or restart server
 
 ## Supported Databases
 
@@ -74,7 +91,7 @@ The ConVar `sm_advertisements_database` controls whether to use the database (1)
 
 ## Database Schema
 
-### advertisements_messages Table
+### advertisements Table
 - Stores advertisement messages
 - Fields: id, enabled, order, center, chat, hint, menu, top, flags
 - Supports all existing advertisement types and features
@@ -92,7 +109,7 @@ The plugin falls back to flat files in the following scenarios:
    - Non-critical: logs error but continues
    
 3. **Message Loading Errors**
-   - Cannot query advertisements_messages table
+   - Cannot query advertisements table
    - Falls back to flat files
 
 4. **ConVar Override**
@@ -130,33 +147,18 @@ The plugin automatically detects the database driver and adjusts its behavior:
 - `addons/sourcemod/configs/advertisements_mysql.sql` - MySQL initialization script
 - `addons/sourcemod/configs/databases.cfg.example` - Database configuration examples
 - `addons/sourcemod/configs/DATABASE_USAGE.md` - User documentation
-- `SQLITE_CHANGES.md` - This technical summary
-
-## Testing Recommendations
-
-1. **SQLite Testing**
-   - Test with empty database (auto-creates tables)
-   - Test with populated database (loads messages correctly)
-   - Test fallback by renaming database file
-
-2. **MySQL Testing**
-   - Test connection with valid MySQL credentials
-   - Test utf8mb4 charset support with emoji in messages
-   - Test concurrent access from multiple servers
-
-3. **General Testing**
-   - Test ConVar changes (sm_advertisements_database 0/1)
-   - Test sm_advertisements_reload command in both modes
-   - Test with different database config names via sm_advertisements_dbconfig
-   - Verify all advertisement types work (center, chat, hint, menu, top)
-   - Verify flag filtering works correctly
-   - Verify message ordering by 'order' field
-   - Verify variables and color codes work in database messages
+- `README.md` - This technical summary
 
 ## Backwards Compatibility
 
-- Fully backwards compatible
+- Fully backwards compatible with original plugin
 - Existing installations continue to work with flat files
 - New installations default to database mode but fall back if needed
 - No breaking changes to existing configurations
-- ConVar names changed but functionality preserved
+- ConVar names are new and don't conflict with original plugin
+
+---
+
+**Original Plugin:** [ErikMinekus/sm-advertisements](https://github.com/ErikMinekus/sm-advertisements)  
+**Original Author:** Tsunami  
+**Database Fork:** Leggers

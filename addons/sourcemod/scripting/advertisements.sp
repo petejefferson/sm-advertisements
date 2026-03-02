@@ -9,13 +9,13 @@
 #include "advertisements/chatcolors.sp"
 #include "advertisements/topcolors.sp"
 
-#define PL_VERSION	"2.1.3"
+#define PL_VERSION	"2.1.2-db"
 #define UPDATE_URL	"http://ErikMinekus.github.io/sm-advertisements/update.txt"
 
 public Plugin myinfo =
 {
     name        = "Advertisements",
-    author      = "Tsunami",
+    author      = "Tsunami, Leggers",
     description = "Display advertisements",
     version     = PL_VERSION,
     url         = "http://www.tsunami-productions.nl"
@@ -449,7 +449,7 @@ void CreateDatabaseTables()
     // Create messages table
     if (isMySQL) {
         Format(query, sizeof(query), 
-            "CREATE TABLE IF NOT EXISTS advertisements_messages ("
+            "CREATE TABLE IF NOT EXISTS advertisements ("
             ... "id INT NOT NULL AUTO_INCREMENT, "
             ... "enabled TINYINT, "
             ... "`order` INT, "
@@ -463,7 +463,7 @@ void CreateDatabaseTables()
             ... ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     } else {
         Format(query, sizeof(query), 
-            "CREATE TABLE IF NOT EXISTS advertisements_messages ("
+            "CREATE TABLE IF NOT EXISTS advertisements ("
             ... "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE, "
             ... "enabled INTEGER, "
             ... "\"order\" INTEGER, "
@@ -502,11 +502,11 @@ void LoadAdsFromDatabase()
     char query[256];
     if (isMySQL) {
         Format(query, sizeof(query), 
-            "SELECT center, chat, hint, menu, top, flags FROM advertisements_messages "
+            "SELECT center, chat, hint, menu, top, flags FROM advertisements "
             ... "WHERE enabled = 1 ORDER BY `order`, id");
     } else {
         Format(query, sizeof(query), 
-            "SELECT center, chat, hint, menu, top, flags FROM advertisements_messages "
+            "SELECT center, chat, hint, menu, top, flags FROM advertisements "
             ... "WHERE enabled = 1 ORDER BY \"order\", id");
     }
     

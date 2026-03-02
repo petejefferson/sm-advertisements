@@ -96,7 +96,7 @@ Then reload the plugin with: `sm_advertisements_reload`
 
 ## Database Schema
 
-### advertisements_messages Table
+### advertisements Table
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -118,38 +118,38 @@ Then reload the plugin with: `sm_advertisements_reload`
 
 #### SQLite:
 ```sql
-INSERT INTO advertisements_messages (enabled, "order", center, chat, flags) 
+INSERT INTO advertisements (enabled, "order", center, chat, flags) 
 VALUES (1, 10, 'Visit our website!', '', 'none');
 ```
 
 #### MySQL:
 ```sql
-INSERT INTO advertisements_messages (enabled, `order`, center, chat, flags) 
+INSERT INTO advertisements (enabled, `order`, center, chat, flags) 
 VALUES (1, 10, 'Visit our website!', '', 'none');
 ```
 
 ### Disable an Advertisement
 
 ```sql
-UPDATE advertisements_messages SET enabled = 0 WHERE id = 3;
+UPDATE advertisements SET enabled = 0 WHERE id = 3;
 ```
 
 ### Change Display Order
 
 #### SQLite:
 ```sql
-UPDATE advertisements_messages SET "order" = 5 WHERE id = 2;
+UPDATE advertisements SET "order" = 5 WHERE id = 2;
 ```
 
 #### MySQL:
 ```sql
-UPDATE advertisements_messages SET `order` = 5 WHERE id = 2;
+UPDATE advertisements SET `order` = 5 WHERE id = 2;
 ```
 
 ### Delete an Advertisement
 
 ```sql
-DELETE FROM advertisements_messages WHERE id = 4;
+DELETE FROM advertisements WHERE id = 4;
 ```
 
 ### After Making Changes
@@ -215,14 +215,14 @@ All existing variables and color codes work in database messages:
 ### Multi-line Chat Message
 
 ```sql
-INSERT INTO advertisements_messages (enabled, "order", chat, flags)
+INSERT INTO advertisements (enabled, "order", chat, flags)
 VALUES (1, 1, '{green}Welcome to our server!\n{lightgreen}Type !help for commands', 'none');
 ```
 
 ### Admin-Only Message
 
 ```sql
-INSERT INTO advertisements_messages (enabled, "order", top, flags)
+INSERT INTO advertisements (enabled, "order", top, flags)
 VALUES (1, 5, '{red}Admin: Check player reports', '');
 ```
 
@@ -230,6 +230,6 @@ VALUES (1, 5, '{red}Admin: Check player reports', '');
 
 ```sql
 -- This ad won't show to admins with 'z' or 'cft' flags
-INSERT INTO advertisements_messages (enabled, "order", hint, flags)
+INSERT INTO advertisements (enabled, "order", hint, flags)
 VALUES (1, 3, 'Donate for VIP!', 'zcft');
 ```
