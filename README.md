@@ -13,6 +13,9 @@ The plugin now supports storing advertisements in a database (SQLite, MySQL, Pos
 - `sm_advertisements_database` - Controls whether to use database (1) or flat files (0). Default: 1
 - `sm_advertisements_dbconfig` - Database config name from databases.cfg. Default: "advertisements"
 
+### New Commands
+- `sm_advertisements_import` - Import advertisements from flat file to database (server command)
+
 ### New Global Variables
 - `g_bUseDatabase` - Boolean flag indicating if database is currently in use
 - `g_hUseDatabase` - ConVar handle for database toggle
@@ -46,6 +49,13 @@ The plugin now supports storing advertisements in a database (SQLite, MySQL, Pos
    - Automatically falls back to flat files on any error
    - Logs database driver type on success
 
+5. **ImportAdvertisementsFromFile()** - Imports flat file to database
+   - Reads advertisements from KeyValues file
+   - Escapes strings for SQL injection protection
+   - Uses transactions for better performance
+   - Preserves order from flat file
+   - Automatically reloads after import
+
 ### Modified Functions
 
 1. **OnPluginStart()** - Added database ConVars and change hooks
@@ -53,6 +63,7 @@ The plugin now supports storing advertisements in a database (SQLite, MySQL, Pos
 3. **ConVarChanged_File()** - Only reloads if not using database
 4. **ConVarChanged_Database()** - New hook to handle database-related ConVar changes
 5. **Command_ReloadAds()** - Reloads from DB or files based on mode
+6. **Command_ImportFromFile()** - New command to import flat file to database
 
 ## Usage
 
@@ -63,7 +74,8 @@ For detailed setup and usage instructions, see [DATABASE_USAGE.md](addons/source
 1. Configure database connection in `databases.cfg`
 2. Initialize database with provided SQL files
 3. Set ConVars: `sm_advertisements_database 1`
-4. Reload plugin or restart server
+4. (Optional) Import existing flat file: `sm_advertisements_import`
+5. Reload plugin or restart server
 
 ## Supported Databases
 

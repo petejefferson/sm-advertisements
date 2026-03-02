@@ -94,6 +94,26 @@ sm_advertisements_database 0
 
 Then reload the plugin with: `sm_advertisements_reload`
 
+## Migrating from Flat Files
+
+If you have an existing `advertisements.txt` configuration and want to migrate to the database:
+
+1. Make sure the database is connected (`sm_advertisements_database 1`)
+2. Run the import command: `sm_advertisements_import`
+3. The plugin will read your flat file and import all advertisements to the database
+4. Advertisements will be imported with sequential ordering (1, 2, 3, etc.)
+5. The plugin will automatically reload after import
+
+**Note:** The import command does not delete or clear existing database entries. If you want to start fresh, manually delete records from the database first:
+
+```sql
+-- SQLite/PostgreSQL
+DELETE FROM advertisements;
+
+-- MySQL
+DELETE FROM advertisements;
+```
+
 ## Database Schema
 
 ### advertisements Table

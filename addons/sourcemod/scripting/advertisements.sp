@@ -76,6 +76,7 @@ public void OnPluginStart()
     g_hAdvertisements = new ArrayList(sizeof(Advertisement));
 
     RegServerCmd("sm_advertisements_reload", Command_ReloadAds, "Reload the advertisements");
+    RegServerCmd("sm_advertisements_import", Command_ImportFromFile, "Import advertisements from flat file to database");
 
     AddChatColors();
     AddTopColors();
@@ -150,6 +151,26 @@ public Action Command_ReloadAds(int args)
     } else {
         ParseAds();
     }
+    return Plugin_Handled;
+}
+
+public Action Command_ImportFromFile(int args)
+{
+    if (!g_bUseDatabase || g_hDatabase == null) {
+        LogError("Database is not connected. Cannot import advertisements.");
+        return Plugin_Handled;
+    }
+    
+    char sFile[64], sPath[PLATFORM_MAX_PATH];
+    g_hFile.GetString(sFile, sizeof(sFile));
+    BuildPath(Path_SM, sPath, sizeof(sPath), "configs/%s", sFile);
+    
+    if (!FileExists(sPath)) {
+        LogError("File not found: %s", sPath);
+        return Plugin_Handled;
+    }
+    
+    ImportAdvertisementsFromFile(sPath);
     return Plugin_Handled;
 }
 
@@ -572,4 +593,88 @@ void LoadAdsFromDatabase()
     
     RestartTimer();
     LogMessage("Loaded %d advertisements from database (%s)", g_hAdvertisements.Length, driver);
+}
+
+void ImportAdvertisementsFromFile(const char[] filePath)
+{
+    KeyValues hConfig = new KeyValues("Advertisements");
+    hConfig.SetEscapeSequences(true);
+    
+    if (!hConfig.ImportFromFile(filePath)) {
+        LogError("Failed to import file: %s", filePath);
+        delete hConfig;
+        return;
+    }
+    
+    if (!hConfig.GotoFirstSubKey()) {
+        LogError("No advertisements found in file");
+        delete hConfig;
+        return;
+    }
+    
+    char driver[16];
+    g_hDatabase.Driver.GetIdentifier(driver, sizeof(driver));
+    bool isMySQL = StrEqual(driver, "mysql", false);
+    
+    // Start transaction for better performance
+    SQL_LockDatabase(g_hDatabase);
+    SQL_FastQuery(g_hDatabase, "BEGIN TRANSACTION");
+    
+    int importCount = 0;
+    int orderNum = 1;
+    char query[2048];
+    char center[1024], chat[2048], hint[1024], menu[1024], top[1024], flags[22];
+    char centerEsc[2048], chatEsc[4096], hintEsc[2048], menuEsc[2048], topEsc[2048], flagsEsc[44];
+    
+    do {
+        hConfig.GetString("center", center, sizeof(center), "");
+        hConfig.GetString("chat", chat, sizeof(chat), "");
+        hConfig.GetString("hint", hint, sizeof(hint), "");
+        hConfig.GetString("menu", menu, sizeof(menu), "");
+        hConfig.GetString("top", top, sizeof(top), "");
+        hConfig.GetString("flags", flags, sizeof(flags), "none");
+        
+        // Escape strings for SQL
+        SQL_EscapeString(g_hDatabase, center, centerEsc, sizeof(centerEsc));
+        SQL_EscapeString(g_hDatabase, chat, chatEsc, sizeof(chatEsc));
+        SQL_EscapeString(g_hDatabase, hint, hintEsc, sizeof(hintEsc));
+        SQL_EscapeString(g_hDatabase, menu, menuEsc, sizeof(menuEsc));
+        SQL_EscapeString(g_hDatabase, top, topEsc, sizeof(topEsc));
+        SQL_EscapeString(g_hDatabase, flags, flagsEsc, sizeof(flagsEsc));
+        
+        // Build insert query
+        if (isMySQL) {
+            Format(query, sizeof(query),
+                "INSERT INTO advertisements (enabled, `order`, center, chat, hint, menu, top, flags) "
+                ... "VALUES (1, %d, '%s', '%s', '%s', '%s', '%s', '%s')",
+                orderNum, centerEsc, chatEsc, hintEsc, menuEsc, topEsc, flagsEsc);
+        } else {
+            Format(query, sizeof(query),
+                "INSERT INTO advertisements (enabled, \"order\", center, chat, hint, menu, top, flags) "
+                ... "VALUES (1, %d, '%s', '%s', '%s', '%s', '%s', '%s')",
+                orderNum, centerEsc, chatEsc, hintEsc, menuEsc, topEsc, flagsEsc);
+        }
+        
+        if (SQL_FastQuery(g_hDatabase, query)) {
+            importCount++;
+        } else {
+            char error[256];
+            SQL_GetError(g_hDatabase, error, sizeof(error));
+            LogError("Failed to import advertisement #%d: %s", orderNum, error);
+        }
+        
+        orderNum++;
+    } while (hConfig.GotoNextKey());
+    
+    // Commit transaction
+    SQL_FastQuery(g_hDatabase, "COMMIT");
+    SQL_UnlockDatabase(g_hDatabase);
+    
+    delete hConfig;
+    
+    LogMessage("Successfully imported %d advertisements from file to database", importCount);
+    PrintToServer("Successfully imported %d advertisements from file to database", importCount);
+    
+    // Reload advertisements from database
+    LoadAdsFromDatabase();
 }
