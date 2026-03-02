@@ -1,0 +1,42 @@
+// SourceMod Database Configuration for Advertisements Plugin
+// Add this section to your addons/sourcemod/configs/databases.cfg file
+
+"Databases"
+{
+    // SQLite Configuration (Default)
+    "advertisements"
+    {
+        "driver"    "sqlite"
+        "database"  "advertisements"
+    }
+    
+    // MySQL Configuration Example
+    // Uncomment and modify to use MySQL
+    /*
+    "advertisements"
+    {
+        "driver"    "mysql"
+        "host"      "localhost"
+        "database"  "sourcemod"
+        "user"      "root"
+        "pass"      ""
+        //"timeout" "0"
+        //"port"    "3306"
+    }
+    */
+    
+    // PostgreSQL Configuration Example
+    // Uncomment and modify to use PostgreSQL
+    /*
+    "advertisements"
+    {
+        "driver"    "pgsql"
+        "host"      "localhost"
+        "database"  "sourcemod"
+        "user"      "postgres"
+        "pass"      ""
+        //"timeout" "0"
+        //"port"    "5432"
+    }
+    */
+}

@@ -9,7 +9,7 @@
 #include "advertisements/chatcolors.sp"
 #include "advertisements/topcolors.sp"
 
-#define PL_VERSION	"2.1.2"
+#define PL_VERSION	"2.1.3"
 #define UPDATE_URL	"http://ErikMinekus.github.io/sm-advertisements/update.txt"
 
 public Plugin myinfo =
@@ -40,13 +40,17 @@ enum struct Advertisement
  */
 bool g_bMapChooser;
 bool g_bSayText2;
+bool g_bUseDatabase;
 int g_iCurrentAd;
 ArrayList g_hAdvertisements;
 ConVar g_hEnabled;
 ConVar g_hFile;
 ConVar g_hInterval;
 ConVar g_hRandom;
+ConVar g_hUseDatabase;
+ConVar g_hDatabaseConfig;
 Handle g_hTimer;
+Database g_hDatabase;
 
 
 /**
@@ -55,13 +59,17 @@ Handle g_hTimer;
 public void OnPluginStart()
 {
     CreateConVar("sm_advertisements_version", PL_VERSION, "Display advertisements", FCVAR_NOTIFY);
-    g_hEnabled  = CreateConVar("sm_advertisements_enabled",  "1",                  "Enable/disable displaying advertisements.");
-    g_hFile     = CreateConVar("sm_advertisements_file",     "advertisements.txt", "File to read the advertisements from.");
-    g_hInterval = CreateConVar("sm_advertisements_interval", "30",                 "Number of seconds between advertisements.");
-    g_hRandom   = CreateConVar("sm_advertisements_random",   "0",                  "Enable/disable random advertisements.");
+    g_hEnabled        = CreateConVar("sm_advertisements_enabled",  "1",                  "Enable/disable displaying advertisements.");
+    g_hFile           = CreateConVar("sm_advertisements_file",     "advertisements.txt", "File to read the advertisements from.");
+    g_hInterval       = CreateConVar("sm_advertisements_interval", "30",                 "Number of seconds between advertisements.");
+    g_hRandom         = CreateConVar("sm_advertisements_random",   "0",                  "Enable/disable random advertisements.");
+    g_hUseDatabase    = CreateConVar("sm_advertisements_database", "1",                  "Use database (1) or flat files (0).");
+    g_hDatabaseConfig = CreateConVar("sm_advertisements_dbconfig", "advertisements",     "Database config name from databases.cfg.");
 
     g_hFile.AddChangeHook(ConVarChanged_File);
     g_hInterval.AddChangeHook(ConVarChanged_Interval);
+    g_hUseDatabase.AddChangeHook(ConVarChanged_Database);
+    g_hDatabaseConfig.AddChangeHook(ConVarChanged_Database);
 
     g_bMapChooser = LibraryExists("mapchooser");
     g_bSayText2 = GetUserMessageId("SayText2") != INVALID_MESSAGE_ID;
@@ -79,8 +87,12 @@ public void OnPluginStart()
 
 public void OnConfigsExecuted()
 {
-    ParseAds();
-    RestartTimer();
+    if (g_hUseDatabase.BoolValue) {
+        ConnectToDatabase();
+    } else {
+        ParseAds();
+        RestartTimer();
+    }
 }
 
 public void OnLibraryAdded(const char[] name)
@@ -106,12 +118,25 @@ public void OnLibraryRemoved(const char[] name)
  */
 public void ConVarChanged_File(ConVar convar, const char[] oldValue, const char[] newValue)
 {
-    ParseAds();
+    if (!g_bUseDatabase) {
+        ParseAds();
+    }
 }
 
 public void ConVarChanged_Interval(ConVar convar, const char[] oldValue, const char[] newValue)
 {
     RestartTimer();
+}
+
+public void ConVarChanged_Database(ConVar convar, const char[] oldValue, const char[] newValue)
+{
+    if (g_hUseDatabase.BoolValue) {
+        ConnectToDatabase();
+    } else {
+        g_bUseDatabase = false;
+        ParseAds();
+        RestartTimer();
+    }
 }
 
 
@@ -120,7 +145,11 @@ public void ConVarChanged_Interval(ConVar convar, const char[] oldValue, const c
  */
 public Action Command_ReloadAds(int args)
 {
-    ParseAds();
+    if (g_bUseDatabase) {
+        LoadAdsFromDatabase();
+    } else {
+        ParseAds();
+    }
     return Plugin_Handled;
 }
 
@@ -372,4 +401,175 @@ void RestartTimer()
 {
     delete g_hTimer;
     g_hTimer = CreateTimer(float(g_hInterval.IntValue), Timer_DisplayAd, _, TIMER_REPEAT);
+}
+
+/**
+ * Database Functions
+ */
+void ConnectToDatabase()
+{
+    char configName[64];
+    g_hDatabaseConfig.GetString(configName, sizeof(configName));
+    
+    Database.Connect(OnDatabaseConnected, configName);
+}
+
+public void OnDatabaseConnected(Database db, const char[] error, any data)
+{
+    if (db == null) {
+        LogError("Failed to connect to database: %s", error);
+        LogError("Falling back to flat file configuration");
+        g_bUseDatabase = false;
+        ParseAds();
+        RestartTimer();
+        return;
+    }
+    
+    g_hDatabase = db;
+    g_bUseDatabase = true;
+    
+    // Set character set for MySQL databases
+    char driver[16];
+    db.Driver.GetIdentifier(driver, sizeof(driver));
+    if (StrEqual(driver, "mysql", false)) {
+        db.SetCharset("utf8mb4");
+    }
+    
+    CreateDatabaseTables();
+}
+
+void CreateDatabaseTables()
+{
+    char driver[16];
+    g_hDatabase.Driver.GetIdentifier(driver, sizeof(driver));
+    bool isMySQL = StrEqual(driver, "mysql", false);
+    
+    char query[1024];
+    
+    // Create messages table
+    if (isMySQL) {
+        Format(query, sizeof(query), 
+            "CREATE TABLE IF NOT EXISTS advertisements_messages ("
+            ... "id INT NOT NULL AUTO_INCREMENT, "
+            ... "enabled TINYINT, "
+            ... "`order` INT, "
+            ... "center TEXT, "
+            ... "chat TEXT, "
+            ... "hint TEXT, "
+            ... "menu TEXT, "
+            ... "top TEXT, "
+            ... "flags VARCHAR(32), "
+            ... "PRIMARY KEY(id)"
+            ... ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    } else {
+        Format(query, sizeof(query), 
+            "CREATE TABLE IF NOT EXISTS advertisements_messages ("
+            ... "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE, "
+            ... "enabled INTEGER, "
+            ... "\"order\" INTEGER, "
+            ... "center TEXT, "
+            ... "chat TEXT, "
+            ... "hint TEXT, "
+            ... "menu TEXT, "
+            ... "top TEXT, "
+            ... "flags TEXT"
+            ... ")");
+    }
+    
+    if (!SQL_FastQuery(g_hDatabase, query)) {
+        char error[256];
+        SQL_GetError(g_hDatabase, error, sizeof(error));
+        LogError("Failed to create messages table: %s", error);
+    }
+    
+    LoadAdsFromDatabase();
+}
+
+void LoadAdsFromDatabase()
+{
+    if (g_hDatabase == null) {
+        LogError("Database not connected");
+        g_bUseDatabase = false;
+        ParseAds();
+        RestartTimer();
+        return;
+    }
+    
+    char driver[16];
+    g_hDatabase.Driver.GetIdentifier(driver, sizeof(driver));
+    bool isMySQL = StrEqual(driver, "mysql", false);
+    
+    char query[256];
+    if (isMySQL) {
+        Format(query, sizeof(query), 
+            "SELECT center, chat, hint, menu, top, flags FROM advertisements_messages "
+            ... "WHERE enabled = 1 ORDER BY `order`, id");
+    } else {
+        Format(query, sizeof(query), 
+            "SELECT center, chat, hint, menu, top, flags FROM advertisements_messages "
+            ... "WHERE enabled = 1 ORDER BY \"order\", id");
+    }
+    
+    DBResultSet results = SQL_Query(g_hDatabase, query);
+    
+    if (results == null) {
+        char error[256];
+        SQL_GetError(g_hDatabase, error, sizeof(error));
+        LogError("Failed to load advertisements from database: %s", error);
+        LogError("Falling back to flat file configuration");
+        g_bUseDatabase = false;
+        ParseAds();
+        RestartTimer();
+        return;
+    }
+    
+    g_iCurrentAd = 0;
+    g_hAdvertisements.Clear();
+    
+    Advertisement ad;
+    while (SQL_FetchRow(results)) {
+        // Reset the struct
+        ad.center[0] = '\0';
+        ad.chat[0] = '\0';
+        ad.hint[0] = '\0';
+        ad.menu[0] = '\0';
+        ad.top[0] = '\0';
+        ad.adminsOnly = false;
+        ad.hasFlags = false;
+        ad.flags = 0;
+        
+        // Read from database
+        if (!SQL_IsFieldNull(results, 0))
+            SQL_FetchString(results, 0, ad.center, sizeof(Advertisement::center));
+        if (!SQL_IsFieldNull(results, 1))
+            SQL_FetchString(results, 1, ad.chat, sizeof(Advertisement::chat));
+        if (!SQL_IsFieldNull(results, 2))
+            SQL_FetchString(results, 2, ad.hint, sizeof(Advertisement::hint));
+        if (!SQL_IsFieldNull(results, 3))
+            SQL_FetchString(results, 3, ad.menu, sizeof(Advertisement::menu));
+        if (!SQL_IsFieldNull(results, 4))
+            SQL_FetchString(results, 4, ad.top, sizeof(Advertisement::top));
+        
+        char flags[22];
+        if (!SQL_IsFieldNull(results, 5)) {
+            SQL_FetchString(results, 5, flags, sizeof(flags));
+        } else {
+            strcopy(flags, sizeof(flags), "none");
+        }
+        
+        ad.adminsOnly = StrEqual(flags, "");
+        ad.hasFlags   = !StrEqual(flags, "none");
+        ad.flags      = ReadFlagString(flags);
+        
+        g_hAdvertisements.PushArray(ad);
+    }
+    
+    delete results;
+    
+    if (g_hRandom.BoolValue) {
+        g_hAdvertisements.Sort(Sort_Random, Sort_Integer);
+    }
+    
+    RestartTimer();
+    LogMessage("Loaded %d advertisements from database (%s)", g_hAdvertisements.Length, driver);
 }
